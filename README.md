@@ -78,6 +78,17 @@ fnox x -- npx -y mcp-server-tripit
 
 ## What it can do
 
+`tripit_trips_list` returns trip summaries by default. Pass `includeDetails: true`
+to also return a `tripDetails` array with full itineraries, including flight
+numbers, booking/supplier confirmation numbers, lodging, and other reservations
+available in TripIt. Use a small `pageSize`: this makes an additional API request
+per trip.
+
+For one trip, call `tripit_trips_get` with its ID or UUID. Its full response
+includes reservation objects such as `AirObject` and `LodgingObject`. Flight
+segments and confirmation numbers appear inside those objects, rather than the
+top-level `Trip` summary.
+
 Built on top of [`dvcrn/tripit-cli`](https://github.com/dvcrn/tripit-cli), this MCP server exposes the TripIt API for common travel workflows, including:
 
 - listing and fetching trips

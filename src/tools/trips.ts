@@ -8,28 +8,38 @@ export function registerTripTools(server: McpServer): void {
     "tripit_trips_list",
     {
       title: "TripIt Trips List",
-      description: "List trips in the authenticated TripIt account.",
+      description: "List trips in the authenticated TripIt account. Set includeDetails=true to include full itineraries with flight numbers, confirmation numbers, lodging, and other reservations. Otherwise returns trip summaries; use tripit_trips_get for a selected trip's full details.",
       inputSchema: {
         pageSize: z.number().int().positive().optional().describe("Number of trips to return. Defaults to 100."),
         pageNum: z.number().int().positive().optional().describe("Page number to fetch. Defaults to 1."),
         past: z.boolean().optional().describe("When true, list past trips instead of current/future trips."),
+        includeDetails: z.boolean().optional().describe("Fetch full itinerary objects for each trip, including flight numbers and booking confirmations. Defaults to false. Use a small pageSize when requesting details."),
       },
       annotations: {
         readOnlyHint: true,
         idempotentHint: true,
       },
     },
-    async ({ pageSize, pageNum, past }) =>
-      jsonResult(
-        (await withTripIt((client) => client.listTrips(pageSize ?? 100, pageNum ?? 1, past ?? false))) as Record<string, unknown>,
-      ),
+    async ({ pageSize, pageNum, past, includeDetails }) =>
+      jsonResult(await withTripIt(async (client) => {
+        const result = await client.listTrips(pageSize ?? 100, pageNum ?? 1, past ?? false) as Record<string, unknown>;
+        if (!includeDetails || !result.Trip) return result;
+        const trips = Array.isArray(result.Trip) ? result.Trip : [result.Trip];
+        const details: unknown[] = [];
+        for (const trip of trips) {
+          const id = trip.uuid ?? trip.id;
+          if (!id) throw new Error("TripIt returned a trip without an ID or UUID; cannot fetch its itinerary.");
+          details.push(await client.getTrip(String(id)));
+        }
+        return { ...result, tripDetails: details };
+      })),
   );
 
   server.registerTool(
     "tripit_trips_get",
     {
       title: "TripIt Trips Get",
-      description: "Get a trip by TripIt ID or UUID.",
+      description: "Get a trip's full itinerary by TripIt ID or UUID, including flight numbers, booking and supplier confirmation numbers, flight segments, lodging, and other reservation objects when present in TripIt. Use this after tripit_trips_list to retrieve details for a selected trip.",
       inputSchema: {
         id: z.string().min(1).describe("Trip ID or UUID."),
       },
